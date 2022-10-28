@@ -286,6 +286,8 @@ class FakeCam:
             wd = inotify.add_watch(self.v4l2loopback_path, watch_flags)
             self.paused = True
 
+        enable_at = None
+
         while True:
             if self.ondemand:
                 for event in inotify.read(0):
@@ -295,13 +297,18 @@ class FakeCam:
                         if flag == flags.OPEN:
                             self.consumers += 1
                     if self.consumers > 0:
-                        self.paused = False
-                        self.load_images()
-                        print("Consumers:", self.consumers)
+                        if enable_at is None:
+                            enable_at = time.monotonic() + 1.0
                     else:
                         self.consumers = 0
-                        self.paused = True
-                        print("No consumers remaining, paused")
+                        enable_at = None
+                if self.paused and enable_at is not None and time.monotonic() - enable_at > 0.0:
+                    self.paused = False
+                    self.load_images()
+                    print("Consumers:", self.consumers)
+                elif not self.paused and enable_at is None:
+                    self.paused = True
+                    print("No consumers remaining, paused")
 
             if not self.paused:
                 if self.real_cam is None:
